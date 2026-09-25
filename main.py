@@ -7,7 +7,7 @@ from telegram.ext import Application
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
 BOT_TOKEN = "8919624517:AAHZWaZafyXecaiQ9w0IXisDCVRB-jQw7JI"      # Paste your BotFather token
-GROUP_CHAT_ID = "@mohittyagidoubts"  # Paste your group chat ID (e.g. -100123456789)
+GROUP_CHAT_ID = "@jeecommunity1"  # Paste your group chat ID (e.g. -100123456789)
 
 # Load questions from JSON
 with open("questions.json", "r", encoding="utf-8") as f:
