@@ -1,12 +1,11 @@
 import os
 import random
+import asyncio
+from aiohttp import web
 from telegram import Update
 from telegram.ext import Application, PollAnswerHandler, ContextTypes
 
-# Read token from environment variable (recommended for deployment) or fallback string
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8919624517:AAHZWaZafyXecaiQ9w0IXisDCVRB-jQw7JI")
-
-# Target group handle or Chat ID
+TOKEN = os.getenv("8919624517:AAHZWaZafyXecaiQ9w0IXisDCVRB-jQw7JI")
 TARGET_CHAT_ID = "@jeecommunity1"
 
 # Track consecutive correct answers: {user_id: {"name": str, "streak": int}}
@@ -73,27 +72,45 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     poll_id = answer.poll_id
     correct_option_id = context.bot_data.get(poll_id)
 
-    # Check if user selected the correct answer
     if answer.option_ids and answer.option_ids[0] == correct_option_id:
         user_stats[user_id]["streak"] += 1
-        current_streak = user_stats[user_id]["streak"]
-
-        # Trigger appreciation every 3 correct answers
-        if current_streak == 3:
+        if user_stats[user_id]["streak"] == 3:
             msg = random.choice(APPRECIATION_MESSAGES).format(name=name)
             await context.bot.send_message(chat_id=TARGET_CHAT_ID, text=msg)
-            user_stats[user_id]["streak"] = 0  # Reset streak
-            
+            user_stats[user_id]["streak"] = 0
     else:
-        # Wrong answer -> Send random roast & reset streak
         user_stats[user_id]["streak"] = 0
         roast_text = random.choice(ROAST_MESSAGES).format(name=name)
         await context.bot.send_message(chat_id=TARGET_CHAT_ID, text=roast_text)
 
-def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(PollAnswerHandler(handle_poll_answer))
-    app.run_polling()
+# --- DUMMY HTTP SERVER TO KEEP RENDER FREE TIER ALIVE ---
+async def handle_health_check(request):
+    return web.Response(text="Bot is alive!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+async def main():
+    # Start web server for Render health checks
+    await start_web_server()
+    
+    # Initialize and start Telegram bot
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(PollAnswerHandler(handle_poll_answer))
+    
+    async with application:
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()
+        print("Bot is up and polling...")
+        # Keep running continuously
+        await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
