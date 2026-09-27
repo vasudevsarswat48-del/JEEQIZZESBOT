@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.ext import Application, PollAnswerHandler, ContextTypes
 
 
-TOKEN = os.getenv("8919624517:AAFr__u362xUd4Hvt5YcpzYTinlAOjUICW4")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TARGET_CHAT_ID = "@jeecommunity1"
 
 QUESTION_INTERVAL = 1800
