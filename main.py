@@ -137,6 +137,22 @@ async def start_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
+
+async def handle_incoming_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Forward the incoming private message to the Admin Chat
+    forwarded_msg = await context.bot.forward_message(
+        chat_id=ADMIN_CHAT_ID,
+        from_chat_id=user_id,
+        message_id=update.message.message_id
+    )
+    
+    # Map the forwarded message ID to the user ID for admin reply routing
+    reply_tracker[forwarded_msg.message_id] = user_id
+    await update.message.reply_text("Message received. An admin will get back to you shortly.")
+
+
 async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if the message is coming from the Admin Chat and is a reply to a forwarded message
     if update.effective_chat.id == ADMIN_CHAT_ID and update.message.reply_to_message:
@@ -155,6 +171,27 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await update.message.reply_text("✅ Reply sent anonymously via Bot!")
             except Exception as e:
                 await update.message.reply_text(f"❌ Failed to deliver message: {e}")
+
+async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Check if the message is coming from the Admin Chat and is a reply to a forwarded message
+    if update.effective_chat.id == ADMIN_CHAT_ID and update.message.reply_to_message:
+        replied_msg_id = update.message.reply_to_message.message_id
+
+        # Look up original sender ID from RAM tracker
+        target_user_id = reply_tracker.get(replied_msg_id)
+
+        if target_user_id:
+            try:
+                # Send message to user directly as the Bot
+                await context.bot.send_message(
+                    chat_id=target_user_id,
+                    text=update.message.text
+                )
+                await update.message.reply_text("✅ Reply sent anonymously via Bot!")
+            except Exception as e:
+                await update.message.reply_text(f"❌ Failed to deliver message: {e}")
+
+
 
 async def main():
     await start_web_server()
