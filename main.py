@@ -10,7 +10,7 @@ from telegram.ext import Application, MessageHandler, PollAnswerHandler, Context
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TARGET_CHAT_ID = "@jeecommunity1"
 
-ADMIN_CHAT_ID = -1003732049859
+ADMIN_CHAT_ID = -3973293437
 
 QUESTION_INTERVAL = 1800
 
