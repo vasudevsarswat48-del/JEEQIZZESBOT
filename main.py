@@ -64,8 +64,7 @@ ROAST_MESSAGES = [
 ]
 
 async def send_automatic_questions(application: Application):
-    """Background task to load questions.json and send polls periodically."""
-    await asyncio.sleep(10)  # Initial wait on startup
+    await asyncio.sleep(5)
     while True:
         try:
             if os.path.exists("questions.json"):
@@ -75,23 +74,24 @@ async def send_automatic_questions(application: Application):
                 if questions:
                     q = random.choice(questions)
                     
-                    # Send non-anonymous poll to track user answers
+                    # Fallback lookup if key key varies
+                    correct_id = q.get("correct_option_id") if "correct_option_id" in q else q.get("correct_option", 0)
+                    
                     poll_message = await application.bot.send_poll(
                         chat_id=TARGET_CHAT_ID,
                         question=q["question"],
                         options=q["options"],
                         type="quiz",
-                        correct_option_id=q["correct_option_id"],
+                        correct_option_id=correct_id,
                         is_anonymous=False
                     )
                     
-                    # Map poll_id to correct_option_id for evaluation
-                    application.bot_data[poll_message.poll.id] = q["correct_option_id"]
-                    print(f"Posted new quiz question: {q['question']}")
+                    application.bot_data[poll_message.poll.id] = correct_id
+                    print(f"[SUCCESS] Posted poll: {q['question']}")
             else:
-                print("questions.json file not found.")
+                print("[ERROR] questions.json file not found.")
         except Exception as e:
-            print(f"Error posting automated question: {e}")
+            print(f"[ERROR] Failed to post question: {e}")
             
         await asyncio.sleep(QUESTION_INTERVAL)
 
