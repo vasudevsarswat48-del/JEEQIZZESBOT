@@ -5,7 +5,7 @@ from aiohttp import web
 from telegram import Update
 from telegram.ext import Application, PollAnswerHandler, ContextTypes
 
-TOKEN = os.getenv("8919624517:AAHZWaZafyXecaiQ9w0IXisDCVRB-jQw7JI")
+TOKEN = os.getenv("8919624517:AAFr__u362xUd4Hvt5YcpzYTinlAOjUICW4")
 TARGET_CHAT_ID = "@jeecommunity1"
 
 # Track consecutive correct answers: {user_id: {"name": str, "streak": int}}
