@@ -4,15 +4,18 @@ import random
 import asyncio
 from aiohttp import web
 from telegram import Update
-from telegram.ext import Application, PollAnswerHandler, ContextTypes
+from telegram.ext import Application, MessageHandler, PollAnswerHandler, ContextTypes
 
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TARGET_CHAT_ID = "@jeecommunity1"
 
+ADMIN_CHAT_ID = -1003732049859
+
 QUESTION_INTERVAL = 1800
 
-# Track consecutive correct answers: {user_id: {"name": str, "streak": int}}
+reply_tracker = {}
+
 user_stats = {}
 
 # List of Appreciation Messages
@@ -62,6 +65,25 @@ ROAST_MESSAGES = [
     "⚡ {name} clicked an answer so wrong that basic thermodynamics broke down trying to explain it! ⚛️",
     "🛑 Pause, {name}! Before you attempt the next one, promise us you'll open a textbook first! 📖"
 ]
+
+async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Check if the message is coming from the Admin Chat and is a reply to a forwarded message
+    if update.effective_chat.id == ADMIN_CHAT_ID and update.message.reply_to_message:
+        replied_msg_id = update.message.reply_to_message.message_id
+
+        # Look up original sender ID from RAM tracker
+        target_user_id = reply_tracker.get(replied_msg_id)
+
+        if target_user_id:
+            try:
+                # Send message to user directly as the Bot
+                await context.bot.send_message(
+                    chat_id=target_user_id,
+                    text=update.message.text
+                )
+                await update.message.reply_text("✅ Reply sent anonymously via Bot!")
+            except Exception as e:
+                await update.message.reply_text(f"❌ Failed to deliver message: {e}")
 
 async def send_automatic_questions(application: Application):
     await asyncio.sleep(5)
@@ -136,8 +158,21 @@ async def main():
     await start_web_server()
     
     application = Application.builder().token(TOKEN).build()
+    
+    # 1. Existing quiz poll handler
     application.add_handler(PollAnswerHandler(handle_poll_answer))
     
+    # 2. ADD THE NEW HANDLERS HERE:
+    # Handle user messages in private chat
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_incoming_user_message)
+    )
+    
+    # Handle admin replies in the admin group/chat
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND & filters.REPLY, handle_admin_reply)
+    )
+
     async with application:
         await application.initialize()
         await application.start()
