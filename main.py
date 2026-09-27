@@ -1,41 +1,98 @@
-import json
+import os
 import random
-import logging
-from telegram.ext import Application
+from telegram import Update
+from telegram.ext import Application, PollAnswerHandler, ContextTypes
 
-# Enable logging
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+# Read token from environment variable (recommended for deployment) or fallback string
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8919624517:AAHZWaZafyXecaiQ9w0IXisDCVRB-jQw7JI")
 
-BOT_TOKEN = "8919624517:AAHZWaZafyXecaiQ9w0IXisDCVRB-jQw7JI"      # Paste your BotFather token
-GROUP_CHAT_ID = "@jeecommunity1"  # Paste your group chat ID (e.g. -100123456789)
+# Target group handle or Chat ID
+TARGET_CHAT_ID = "@jeecommunity1"
 
-# Load questions from JSON
-with open("questions.json", "r", encoding="utf-8") as f:
-    JEE_QUESTIONS = json.load(f)
+# Track consecutive correct answers: {user_id: {"name": str, "streak": int}}
+user_stats = {}
 
-async def send_quiz_poll(context):
-    q = random.choice(JEE_QUESTIONS)
+# List of Appreciation Messages
+APPRECIATION_MESSAGES = [
+    "🏆 Outstanding, {name}! 3 correct in a row! You're unstoppable! 🔥",
+    "🧠 Look at the big brain on {name}! 3 in a row, excellent job! 🎉",
+    "🎯 Pure precision, {name}! 3 consecutive right answers! Keep rolling! 🚀",
+    "⚡ {name} is on fire! 3 out of 3 right! Top tier performance! 👑"
+    "🎓 AIR 1 in the making! {name} just nailed 3 questions straight! 🌟",
+    "🔬 Textbook perfect execution, {name}! 3 in a row—physics and math bow to you! 📐",
+    "💣 BOOM! 3 out of 3! {name} is absolute main-character energy right now! 💥",
+    "🚀 Unstoppable momentum, {name}! That's 3 consecutive correct answers! Keep it up! 🏁",
+    "🧠 Absolute genius at work! {name} just cleared 3 questions without breaking a sweat! 🧪",
+    "🥇 High-level accuracy, {name}! 3 straight hits! You're making JEE look easy! 🎯"
+    "👑 Absolute legend! {name} just effortlessly dropped a 3-peat of correct answers! ⚡",
+    "🎯 Precision 100! {name} is putting on a masterclass right now with 3 in a row! 💯",
+    "🚀 Stand back! {name} is on a streak that's sending them straight to IIT Bombay CSE! 🏰",
+    "🧪 Pure brilliance, {name}! 3 straight hits without even needing a rough sheet! 📐",
+    "🔥 {name} is cooking! 3 consecutive correct answers—the competition is sweating now! 💦",
+    "🌟 Effortless execution! {name} is making these JEE-level questions look like primary school math! 🎓",
+    "⚡ Unstoppable force! {name} just cleared 3 in a row! Give this person a medal already! 🥇",
+    "🧠 High-IQ gameplay from {name}! 3 out of 3 right—absolute top-percentile energy! 📈",
+    "💥 BOOM! 3 straight bullseyes from {name}! The hard work is clearly paying off! 📚",
+    "🏆 Flawless performance, {name}! 3 consecutive answers locked in correctly! Keep dominating! 🔱"
+]
+
+# Savage JEE/NEET Exam Roasts
+ROAST_MESSAGES = [
+    "💀 {name}, negative marking exists just because of people like you. Drop the phone and open NCERT! 📖",
+    "🤡 Bro {name}, even a random number generator would score higher than you. What was that attempt?! 🎲",
+    "📉 {name} just single-handedly lowered the cutoff for everyone else in this group. Thank you for your service! 🫡",
+    "🧠 {name}, did you select that option with your eyes closed or are you actively trying to get a 7-digit rank? 🎯",
+    "🛑 Pause for a moment, {name}. Think about your dream college, then realize you won't get anywhere near it with answers like that! 🏫",
+    "💨 {name}'s preparation level: 0%. Confidence level: 100%. Result: Pure disaster! 📉",
+    "❌ {name}, if incorrect answers were JEE Advanced ranks, you'd be AIR 1 today! 🏆",
+    "📚 {name}, please re-evaluate your life choices. That answer was an insult to basic physics and math! 🤦‍♂️",
+    "🧟 {name} clicked that so fast without thinking... even the bot felt second-hand embarrassment! 🤖",
+    "💸 {name}, your parents are paying tuition fees just for you to guess these options? 😭"
+    "📉 {name}, even Newton's third law couldn't equal the force of how hard you just fell on that question! 🍎",
+    "🤡 Bro {name}, did you pick that option based on your birth date or astrological sign? Because it sure wasn't logic! 🔮",
+    "💀 {name}, you're making NTA look merciful right now. Please re-read the basics before clicking anything else! 🛑",
+    "🤦‍♂️ {name} just proved that speed and accuracy are two completely different things! Slow down and actually read! 🐢",
+    "🗑️ That answer from {name} was so far off, even the process of elimination couldn't save it! 🕯️",
+    "📉 {name}'s percentile just hit absolute zero faster than liquid helium! 🧊",
+    "🎪 Ladies and gentlemen, {name} is here to demonstrate what NOT to do in the exam hall! 👏",
+    "📚 {name}, even a blank OMR sheet would have scored more relative points than that choice! 📝",
+    "⚡ {name} clicked an answer so wrong that basic thermodynamics broke down trying to explain it! ⚛️",
+    "🛑 Pause, {name}! Before you attempt the next one, promise us you'll open a textbook first! 📖"
+]
+
+async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    answer = update.poll_answer
+    user = answer.user
+    user_id = user.id
     
-    # Send quiz mode poll to group
-    await context.bot.send_poll(
-        chat_id=GROUP_CHAT_ID,
-        question=q["question"][:300],  # Max 300 chars
-        options=[opt[:100] for opt in q["options"]],  # Max 100 chars per option
-        type="quiz",
-        correct_option_id=int(q["correct_id"]),
-        explanation=q.get("explanation", "")[:200],  # Max 200 chars
-        is_anonymous=True
-    )
+    name = f"@{user.username}" if user.username else user.first_name
+
+    if user_id not in user_stats:
+        user_stats[user_id] = {"name": name, "streak": 0}
+
+    poll_id = answer.poll_id
+    correct_option_id = context.bot_data.get(poll_id)
+
+    # Check if user selected the correct answer
+    if answer.option_ids and answer.option_ids[0] == correct_option_id:
+        user_stats[user_id]["streak"] += 1
+        current_streak = user_stats[user_id]["streak"]
+
+        # Trigger appreciation every 3 correct answers
+        if current_streak == 3:
+            msg = random.choice(APPRECIATION_MESSAGES).format(name=name)
+            await context.bot.send_message(chat_id=TARGET_CHAT_ID, text=msg)
+            user_stats[user_id]["streak"] = 0  # Reset streak
+            
+    else:
+        # Wrong answer -> Send random roast & reset streak
+        user_stats[user_id]["streak"] = 0
+        roast_text = random.choice(ROAST_MESSAGES).format(name=name)
+        await context.bot.send_message(chat_id=TARGET_CHAT_ID, text=roast_text)
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    # Schedule poll every 1 hour (3600 seconds)
-    # Change interval=3600 to whatever interval you want in seconds
-    job_queue = app.job_queue
-    job_queue.run_repeating(send_quiz_poll, interval=1800, first=10)
-
-    print("Bot is running...")
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(PollAnswerHandler(handle_poll_answer))
     app.run_polling()
 
 if __name__ == "__main__":
