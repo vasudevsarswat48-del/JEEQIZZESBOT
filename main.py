@@ -1,12 +1,16 @@
 import os
+import json
 import random
 import asyncio
 from aiohttp import web
 from telegram import Update
 from telegram.ext import Application, PollAnswerHandler, ContextTypes
 
+
 TOKEN = os.getenv("8919624517:AAFr__u362xUd4Hvt5YcpzYTinlAOjUICW4")
 TARGET_CHAT_ID = "@jeecommunity1"
+
+QUESTION_INTERVAL = 1800
 
 # Track consecutive correct answers: {user_id: {"name": str, "streak": int}}
 user_stats = {}
@@ -59,6 +63,38 @@ ROAST_MESSAGES = [
     "🛑 Pause, {name}! Before you attempt the next one, promise us you'll open a textbook first! 📖"
 ]
 
+async def send_automatic_questions(application: Application):
+    """Background task to load questions.json and send polls periodically."""
+    await asyncio.sleep(10)  # Initial wait on startup
+    while True:
+        try:
+            if os.path.exists("questions.json"):
+                with open("questions.json", "r", encoding="utf-8") as f:
+                    questions = json.load(f)
+                
+                if questions:
+                    q = random.choice(questions)
+                    
+                    # Send non-anonymous poll to track user answers
+                    poll_message = await application.bot.send_poll(
+                        chat_id=TARGET_CHAT_ID,
+                        question=q["question"],
+                        options=q["options"],
+                        type="quiz",
+                        correct_option_id=q["correct_option_id"],
+                        is_anonymous=False
+                    )
+                    
+                    # Map poll_id to correct_option_id for evaluation
+                    application.bot_data[poll_message.poll.id] = q["correct_option_id"]
+                    print(f"Posted new quiz question: {q['question']}")
+            else:
+                print("questions.json file not found.")
+        except Exception as e:
+            print(f"Error posting automated question: {e}")
+            
+        await asyncio.sleep(QUESTION_INTERVAL)
+
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
     user = answer.user
@@ -97,10 +133,8 @@ async def start_web_server():
     await site.start()
 
 async def main():
-    # Start web server for Render health checks
     await start_web_server()
     
-    # Initialize and start Telegram bot
     application = Application.builder().token(TOKEN).build()
     application.add_handler(PollAnswerHandler(handle_poll_answer))
     
@@ -108,8 +142,11 @@ async def main():
         await application.initialize()
         await application.start()
         await application.updater.start_polling()
-        print("Bot is up and polling...")
-        # Keep running continuously
+        
+        # Start automated quiz poster in background loop
+        asyncio.create_task(send_automatic_questions(application))
+        
+        print("Bot is live, polling, and auto-posting questions...")
         await asyncio.Event().wait()
 
 if __name__ == "__main__":
